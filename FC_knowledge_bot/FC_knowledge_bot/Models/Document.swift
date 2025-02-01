@@ -27,7 +27,7 @@ final class Document {
         self.uploadDate = Date()
         self.localPath = localPath
         self.isProcessed = false
-        self.chunks = nil
+        self.chunks = []
     }
 }
 

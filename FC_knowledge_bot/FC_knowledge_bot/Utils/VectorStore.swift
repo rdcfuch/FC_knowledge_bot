@@ -1,54 +1,53 @@
-//
-//  VectorStore.swift
-//  FC_knowledge_bot
-//
-//  Created by FC Fu on 1/31/25.
-//
-
 import Foundation
-import faiss
+import SwiftData
 
 class VectorStore {
-    private var index: faiss.Index?
-    private var documentChunks: [DocumentChunk] = []
-    private let dimension: Int = 1536  // Dimension of text-embedding-ada-002 model
-    
-    init() {
-        // Initialize FAISS index with cosine similarity (inner product of normalized vectors)
-        index = faiss.IndexFlatIP(dimension)
+    struct ChunkWithSimilarity {
+        let chunk: DocumentChunk
+        let similarity: Float
     }
     
-    func addEmbedding(_ embedding: [Float], chunk: DocumentChunk) {
-        guard let index = index else { return }
+    func searchSimilar(queryEmbedding: [Float], maxResults: Int = 3) throws -> [DocumentChunk] {
+        let context = try ModelContext(.init(for: Document.self))
+        let descriptor = FetchDescriptor<DocumentChunk>()
         
-        // Normalize the embedding vector
-        let normalizedEmbedding = normalize(embedding)
+        let chunks = try context.fetch(descriptor)
         
-        // Add the normalized embedding to the FAISS index
-        index.add(vectors: [normalizedEmbedding])
+        // Filter out chunks without embeddings
+        let chunksWithEmbeddings = chunks.filter { $0.embedding != nil }
         
-        // Store the document chunk
-        documentChunks.append(chunk)
-    }
-    
-    func searchSimilar(queryEmbedding: [Float], limit: Int = 3) -> [DocumentChunk] {
-        guard let index = index else { return [] }
-        
-        // Normalize the query embedding
-        let normalizedQuery = normalize(queryEmbedding)
-        
-        // Search for similar vectors
-        let (distances, indices) = index.search(vectors: [normalizedQuery], k: limit)
-        
-        // Map the results to document chunks
-        return indices[0].enumerated().compactMap { (i, idx) -> DocumentChunk? in
-            guard idx >= 0 && idx < documentChunks.count else { return nil }
-            return documentChunks[Int(idx)]
+        // Calculate cosine similarity for each chunk
+        let chunksWithSimilarity = chunksWithEmbeddings.map { chunk in
+            ChunkWithSimilarity(
+                chunk: chunk,
+                similarity: cosineSimilarity(queryEmbedding, chunk.embedding!)
+            )
         }
+        
+        // Sort by similarity (highest first) and take top results
+        let sortedChunks = chunksWithSimilarity
+            .sorted { $0.similarity > $1.similarity }
+            .prefix(maxResults)
+            .map { $0.chunk }
+        
+        return Array(sortedChunks)
     }
     
-    private func normalize(_ vector: [Float]) -> [Float] {
-        let norm = sqrt(vector.map { $0 * $0 }.reduce(0, +))
-        return vector.map { $0 / norm }
+    func getAllChunks() throws -> [DocumentChunk] {
+        let context = try ModelContext(.init(for: Document.self))
+        let descriptor = FetchDescriptor<DocumentChunk>()
+        return try context.fetch(descriptor)
+    }
+    
+    private func cosineSimilarity(_ a: [Float], _ b: [Float]) -> Float {
+        guard a.count == b.count else { return 0 }
+        
+        let dotProduct = zip(a, b).reduce(0) { $0 + $1.0 * $1.1 }
+        let magnitudeA = sqrt(a.reduce(0) { $0 + $1 * $1 })
+        let magnitudeB = sqrt(b.reduce(0) { $0 + $1 * $1 })
+        
+        guard magnitudeA > 0 && magnitudeB > 0 else { return 0 }
+        
+        return dotProduct / (magnitudeA * magnitudeB)
     }
 }

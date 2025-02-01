@@ -126,6 +126,28 @@ struct ChatView: View {
         selectedChat = newChat
     }
     
+    private func listVectorDBContents() {
+        let vectorStore = VectorStore()
+        do {
+            print("\n[VectorDB Contents]")
+            let allChunks = try vectorStore.getAllChunks()
+            print("Total chunks: \(allChunks.count)")
+            
+            for (index, chunk) in allChunks.enumerated() {
+                print("\nChunk #\(index + 1)")
+                print("ID: \(chunk.id)")
+                print("Content: \(chunk.content)")
+                if let embedding = chunk.embedding {
+                    print("Embedding size: \(embedding.count)")
+                } else {
+                    print("No embedding found")
+                }
+            }
+        } catch {
+            print("Error listing vector DB contents: \(error)")
+        }
+    }
+    
     private func sendMessage() {
         guard !messageText.isEmpty else { return }
         guard !apiKey.isEmpty else {
@@ -157,8 +179,18 @@ struct ChatView: View {
         let processor = DocumentProcessor(apiKey: apiKey)
         Task {
             do {
-                let manualInputText = UserDefaults.standard.string(forKey: "manual_input_text") ?? ""
-                let contextMessage = userMessage + "\n\nRelevant context:\n---\n" + manualInputText
+                // Get embeddings for the user message
+                let embedding = try await processor.getEmbedding(for: userMessage)
+                
+                // Search for similar chunks using VectorStore
+                let vectorStore = VectorStore()
+                let similarChunks = try vectorStore.searchSimilar(queryEmbedding: embedding, maxResults: 5)
+                
+                // Construct context message from similar chunks
+                let contextMessage = "Context from relevant documents:\n" + (similarChunks.map { "\n" + $0.content }.joined())
+                
+                // List all contents in vector DB
+                listVectorDBContents()
                 
                 print("\n[Context Message]\n\(contextMessage)")
                 

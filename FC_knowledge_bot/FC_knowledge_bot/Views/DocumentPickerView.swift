@@ -206,9 +206,14 @@ struct DocumentPickerView: View {
             Task {
                 do {
                     let processor = DocumentProcessor(apiKey: UserDefaults.standard.string(forKey: "openai_api_key") ?? "")
-                    try await processor.processDocument(document)
+                    try await processor.processDocument(document) { progress in
+                        Task { @MainActor in
+                            processingProgress = progress
+                        }
+                    }
                     document.isProcessed = true
                     await MainActor.run {
+                        isProcessing = false
                         dismiss()
                     }
                 } catch {
