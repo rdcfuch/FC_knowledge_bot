@@ -172,8 +172,8 @@ struct ChatView: View {
                 // Construct context message from similar chunks
                 let contextMessage = "Context from relevant documents:\n" + (similarChunks.map { "\n" + $0.content }.joined())
                 
-                // List all contents in vector DB
-                listVectorDBContents()
+                // // List all contents in vector DB
+                // listVectorDBContents()
                 
                 print("\n[Context Message]\n\(contextMessage)")
                 

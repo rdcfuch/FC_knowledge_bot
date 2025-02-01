@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
@@ -6,6 +7,8 @@ struct SettingsView: View {
     @State private var tempApiKey: String = ""
     @State private var isValidating = false
     @State private var validationError: String? = nil
+    @State private var isRefreshing = false
+    @State private var refreshError: String? = nil
     
     var body: some View {
         NavigationView {
@@ -36,6 +39,29 @@ struct SettingsView: View {
                 
                 Section {
                     Text("Your API key is stored securely in the system keychain and is only used for communicating with OpenAI's API.")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                }
+                
+                Section(header: Text("Knowledge Base")) {
+                    Button(action: refreshKnowledgeBase) {
+                        HStack {
+                            Text("Refresh Knowledge Base")
+                            if isRefreshing {
+                                Spacer()
+                                ProgressView()
+                            }
+                        }
+                    }
+                    .disabled(isRefreshing)
+                    
+                    if let refreshError {
+                        Text(refreshError)
+                            .foregroundColor(.red)
+                            .font(.caption)
+                    }
+                    
+                    Text("This will rebuild the knowledge base by reprocessing all documents and manual texts.")
                         .font(.caption)
                         .foregroundColor(.gray)
                 }
@@ -91,5 +117,59 @@ struct SettingsView: View {
                 }
             }
         }.resume()
+    }
+    
+    private func refreshKnowledgeBase() {
+        isRefreshing = true
+        refreshError = nil
+        
+        Task {
+            do {
+                // Get all documents from the database
+                let schema = Schema([Document.self, DocumentChunk.self])
+                let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+                let container = try ModelContainer(for: schema, configurations: [modelConfiguration])
+                let context = ModelContext(container)
+                
+                // Fetch all documents
+                let descriptor = FetchDescriptor<Document>()
+                let documents = try context.fetch(descriptor)
+                
+                // Delete all chunks
+                let chunkDescriptor = FetchDescriptor<DocumentChunk>()
+                let chunks = try context.fetch(chunkDescriptor)
+                chunks.forEach { context.delete($0) }
+                
+                // Process each document
+                for document in documents {
+                    // Check if the file exists
+                    let fileManager = FileManager.default
+                    if !fileManager.fileExists(atPath: document.localPath) {
+                        // If file doesn't exist, delete the document from database
+                        context.delete(document)
+                        continue
+                    }
+                    
+                    document.chunks = []
+                    document.isProcessed = false
+                    
+                    let processor = DocumentProcessor(apiKey: apiKey)
+                    try await processor.processDocument(document)
+                    document.isProcessed = true
+                }
+                
+                // Save context to persist document deletions
+                try context.save()
+                
+                await MainActor.run {
+                    isRefreshing = false
+                }
+            } catch {
+                await MainActor.run {
+                    isRefreshing = false
+                    refreshError = "Error: \(error.localizedDescription)"
+                }
+            }
+        }
     }
 }
