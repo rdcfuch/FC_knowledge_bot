@@ -12,7 +12,10 @@ import SwiftData
 struct FC_knowledge_botApp: App {
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
-            Item.self,
+            Document.self,
+            DocumentChunk.self,
+            Chat.self,
+            ChatMessage.self
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
