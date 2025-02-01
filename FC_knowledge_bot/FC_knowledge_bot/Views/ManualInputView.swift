@@ -14,6 +14,7 @@ struct ManualInputView: View {
     
     @State private var title = ""
     @State private var content = ""
+    @State private var hasChanges = false
     
     var editingText: ManualText?
     
@@ -29,18 +30,33 @@ struct ManualInputView: View {
         Form {
             Section(header: Text("Title")) {
                 TextField("Enter title", text: $title)
+                    .onChange(of: title) { _, _ in
+                        updateHasChanges()
+                    }
             }
             
             Section(header: Text("Content")) {
                 TextEditor(text: $content)
                     .frame(minHeight: 200)
+                    .onChange(of: content) { _, _ in
+                        updateHasChanges()
+                    }
             }
         }
         .navigationTitle(editingText == nil ? "New Text" : "Edit Text")
         .navigationBarItems(
             leading: Button("Cancel") { dismiss() },
             trailing: Button("Save") { saveText() }
+                .disabled(!hasChanges || (title.isEmpty && content.isEmpty))
         )
+    }
+    
+    private func updateHasChanges() {
+        if let existingText = editingText {
+            hasChanges = title != existingText.title || content != existingText.content
+        } else {
+            hasChanges = !title.isEmpty || !content.isEmpty
+        }
     }
     
     private func saveText() {
