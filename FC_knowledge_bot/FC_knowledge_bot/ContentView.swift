@@ -15,6 +15,16 @@ struct ContentView: View {
 }
 
 #Preview {
-    ContentView()
-        .modelContainer(for: [Document.self, Chat.self, ChatMessage.self, DocumentChunk.self], inMemory: true)
+    let schema = Schema([
+        Document.self,
+        DocumentChunk.self,
+        Chat.self,
+        ChatMessage.self,
+        ManualText.self
+    ])
+    let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+    let container = try! ModelContainer(for: schema, configurations: [config])
+    
+    return ContentView()
+        .modelContainer(container)
 }

@@ -39,6 +39,18 @@ class VectorStore {
         return try context.fetch(descriptor)
     }
     
+    func deleteChunk(id: UUID) throws {
+        let context = try ModelContext(.init(for: Document.self))
+        let descriptor = FetchDescriptor<DocumentChunk>(predicate: #Predicate<DocumentChunk> { chunk in
+            chunk.id == id
+        })
+        
+        if let chunk = try context.fetch(descriptor).first {
+            context.delete(chunk)
+            try context.save()
+        }
+    }
+    
     private func cosineSimilarity(_ a: [Float], _ b: [Float]) -> Float {
         guard a.count == b.count else { return 0 }
         

@@ -37,10 +37,12 @@ final class DocumentChunk {
     var content: String
     var embedding: [Float]?
     var document: Document?
+    var similarity: Float?
     
     init(content: String) {
         self.id = UUID()
         self.content = content
         self.embedding = nil
+        self.similarity = nil
     }
 }

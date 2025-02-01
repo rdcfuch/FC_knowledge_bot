@@ -15,8 +15,7 @@ struct FC_knowledge_botApp: App {
             Document.self,
             DocumentChunk.self,
             Chat.self,
-            ChatMessage.self,
-            ManualText.self
+            ChatMessage.self
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 

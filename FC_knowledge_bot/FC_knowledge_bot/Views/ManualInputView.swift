@@ -6,7 +6,6 @@
 //
 
 import SwiftUI
-import SwiftData
 
 struct ManualInputView: View {
     @Environment(\.dismiss) private var dismiss
@@ -18,13 +17,15 @@ struct ManualInputView: View {
     @State private var isProcessing = false
     @State private var errorMessage: String? = nil
     
-    var editingText: ManualText?
+    private let fileManager = ManualTextFileManager.shared
+    private var editingId: UUID?
     
-    init(editingText: ManualText? = nil) {
-        self.editingText = editingText
-        if let text = editingText {
-            _title = State(initialValue: text.title)
-            _content = State(initialValue: text.content)
+    init(editingId: UUID? = nil) {
+        self.editingId = editingId
+        if let id = editingId,
+           let (metadata, content) = try? fileManager.loadText(id: id) {
+            _title = State(initialValue: metadata.title)
+            _content = State(initialValue: content)
         }
     }
     
@@ -62,7 +63,7 @@ struct ManualInputView: View {
                 }
             }
         }
-        .navigationTitle(editingText == nil ? "New Text" : "Edit Text")
+        .navigationTitle(editingId == nil ? "New Text" : "Edit Text")
         .navigationBarItems(
             leading: Button("Cancel") { dismiss() },
             trailing: Button("Save") { saveText() }
@@ -71,9 +72,12 @@ struct ManualInputView: View {
     }
     
     private func updateHasChanges() {
-        if let existingText = editingText {
-            hasChanges = title != existingText.title || content != existingText.content
+        if let id = editingId,
+           let (metadata, initialContent) = try? fileManager.loadText(id: id) {
+            // For editing mode, compare with values from file
+            hasChanges = title != metadata.title || content != initialContent
         } else {
+            // For new text, enable save if either field is not empty
             hasChanges = !title.isEmpty || !content.isEmpty
         }
     }
@@ -82,22 +86,16 @@ struct ManualInputView: View {
         isProcessing = true
         errorMessage = nil
         
-        if let existingText = editingText {
-            // Update existing text
-            existingText.title = title
-            existingText.content = content
-            existingText.lastModifiedAt = Date()
-        } else {
-            // Create new text
-            let newText = ManualText(title: title, content: content)
-            modelContext.insert(newText)
-        }
-        
-        try? modelContext.save()
-        
-        // Update vector database
         Task {
             do {
+                // Save text to file system
+                if let id = editingId {
+                    _ = try fileManager.saveText(id: id, title: title, content: content)
+                } else {
+                    _ = try fileManager.saveText(title: title, content: content)
+                }
+                
+                // Update vector database
                 let processor = DocumentProcessor(apiKey: UserDefaults.standard.string(forKey: "openai_api_key") ?? "")
                 
                 // Split content into chunks and generate embeddings
@@ -111,33 +109,18 @@ struct ManualInputView: View {
                     let embedding = try await processor.getEmbedding(for: chunk)
                     print("Generated embedding with size: \(embedding.count)")
                     
-                    // Create and save document chunk directly using SwiftData
+                    // Create and save document chunk to SwiftData
                     let documentChunk = DocumentChunk(content: chunk)
                     documentChunk.embedding = embedding
                     modelContext.insert(documentChunk)
-                    print("Saved chunk to vector database")
+                    try modelContext.save()
+                    print("Saved chunk to vector database with embedding size: \(embedding.count)")
+                    print("Chunk content: \(chunk)")
+                    print("Chunk ID: \(documentChunk.id)")
+                    print("ModelContext save successful")
                 }
                 
-                try? modelContext.save()
                 print("\n[Vector DB Update] All chunks processed and saved")
-                
-                // List all contents in vector database
-                let descriptor = FetchDescriptor<DocumentChunk>()
-                if let chunks = try? modelContext.fetch(descriptor) {
-                    print("\n[Vector DB Contents]")
-                    print("Total chunks in database: \(chunks.count)")
-                    
-                    for (index, chunk) in chunks.enumerated() {
-                        print("\nChunk #\(index + 1)")
-                        print("ID: \(chunk.id)")
-                        print("Content: \(chunk.content)")
-                        if let embedding = chunk.embedding {
-                            print("Embedding size: \(embedding.count)")
-                        } else {
-                            print("No embedding found")
-                        }
-                    }
-                }
                 
                 await MainActor.run {
                     isProcessing = false
@@ -146,7 +129,7 @@ struct ManualInputView: View {
             } catch {
                 await MainActor.run {
                     isProcessing = false
-                    errorMessage = "Error updating vector database: \(error.localizedDescription)"
+                    errorMessage = "Error saving text: \(error.localizedDescription)"
                 }
             }
         }
@@ -156,6 +139,5 @@ struct ManualInputView: View {
 #Preview {
     NavigationView {
         ManualInputView()
-            .modelContainer(for: ManualText.self, inMemory: true)
     }
 }

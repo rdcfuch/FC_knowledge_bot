@@ -16,6 +16,7 @@ struct ChatView: View {
     @State private var showSettings = false
     @State private var showDocumentPicker = false
     @AppStorage("openai_api_key") private var apiKey = ""
+    private let vectorStore = VectorStore()
     
     var body: some View {
         NavigationStack {
@@ -25,7 +26,7 @@ struct ChatView: View {
                     Button(action: { showSettings.toggle() }) {
                         Image(systemName: "gearshape")
                             .foregroundColor(.white)
-                    }
+                }
                     Spacer()
                     Text("Knowledge Agent")
                         .foregroundColor(.white)
@@ -34,7 +35,7 @@ struct ChatView: View {
                     Button(action: { showDocumentPicker.toggle() }) {
                         Image(systemName: "doc.badge.plus")
                             .foregroundColor(.white)
-                    }
+                }
                 }
                 .padding()
                 .background(Color.black)
@@ -58,16 +59,16 @@ struct ChatView: View {
                                         .foregroundColor(.primary)
                                     
                                     Spacer()
-                                }
+                            }
                                 .padding()
                                 .background(Color(.systemGray6))
                                 .cornerRadius(12)
-                            }
-                           
                         }
+                           
+                    }
                         .padding(.horizontal)
                         .padding(.bottom, 80)
-                    }
+                }
                 } else {
                     ChatDetailView(chat: selectedChat ?? chats[0])
                 }
@@ -79,16 +80,16 @@ struct ChatView: View {
                         Button(action: { showDocumentPicker.toggle() }) {
                             Image(systemName: "plus")
                                 .foregroundColor(.primary)
-                        }
+                    }
                         TextField("Message", text: $messageText)
                             .textFieldStyle(.plain)
                         Button(action: sendMessage) {
                             Image(systemName: "arrow.up.circle.fill")
                                 .foregroundColor(messageText.isEmpty ? .gray : .blue)
                                 .font(.system(size: 24))
-                        }
-                        .disabled(messageText.isEmpty)
                     }
+                        .disabled(messageText.isEmpty)
+                }
                     .padding()
                     .background(Color(.systemBackground))
                 }
@@ -164,10 +165,41 @@ struct ChatView: View {
             do {
                 // Get embeddings for the user message
                 let embedding = try await processor.getEmbedding(for: userMessage)
+                print("\n[Vector Search Debug] User message: \(userMessage)")
+                print("[Vector Search Debug] Query embedding size: \(embedding.count)")
+                
+                // Debug: List all contents in vector DB before search
+                print("\n[VectorDB Contents Before Search]")
+                let descriptor = FetchDescriptor<DocumentChunk>()
+                let chunks = try modelContext.fetch(descriptor)
+                print("Total chunks in database: \(chunks.count)")
+                
+                for (index, chunk) in chunks.enumerated() {
+                    print("\nChunk #\(index + 1)")
+                    print("ID: \(chunk.id)")
+                    print("Content: \(chunk.content)")
+                    if let embedding = chunk.embedding {
+                        print("Embedding size: \(embedding.count)")
+                    } else {
+                        print("No embedding found")
+                    }
+                }
                 
                 // Search for similar chunks using VectorStore
-                let vectorStore = VectorStore()
+                print("\n[Vector Search Debug] Starting similarity search...")
                 let similarChunks = try vectorStore.searchSimilar(queryEmbedding: embedding, maxResults: 5)
+                print("\n[Vector Search Results] Found \(similarChunks.count) similar chunks")
+                
+                for (index, chunk) in similarChunks.enumerated() {
+                    print("\nChunk #\(index + 1)")
+                    print("Content: \(chunk.content)")
+                    if let similarity = chunk.similarity {
+                        print("Similarity score: \(similarity)")
+                    }
+                    if let embedding = chunk.embedding {
+                        print("Embedding size: \(embedding.count)")
+                    }
+                }
                 
                 // Construct context message from similar chunks
                 let contextMessage = "Context from relevant documents:\n" + (similarChunks.map { "\n" + $0.content }.joined())
@@ -201,7 +233,7 @@ struct ChatView: View {
                 print("Final Messages: \(finalMessages)")
                 
                 let requestBody: [String: Any] = [
-                    "model": "gpt-4",
+                    "model": "gpt-4o-mini",
                     "messages": finalMessages,
                     "temperature": 0.7,
                     "max_tokens": 2000
@@ -236,6 +268,19 @@ struct ChatView: View {
                 await MainActor.run {
                     let botMessage = ChatMessage(content: content, isUserMessage: false)
                     newChat.messages?.append(botMessage)
+                    
+                    // Print manual texts information after chat completion
+                    print("\n[Manual Texts List after Chat]")
+                    let fileManager = ManualTextFileManager.shared
+                    let manualTexts = fileManager.getAllTexts()
+                    print("Total manual texts: \(manualTexts.count)")
+                    
+                    for (index, (metadata, content)) in manualTexts.enumerated() {
+                        print("\nText #\(index + 1)")
+                        print("Title: \(metadata.title)")
+                        print("Content: \(content.prefix(100))...")
+                        print("Last modified: \(metadata.lastModifiedAt)")
+                    }
                 }
             } catch {
                 await MainActor.run {
@@ -245,7 +290,6 @@ struct ChatView: View {
             }
         }
     }
-}
 
 struct ChatDetailView: View {
     let chat: Chat
@@ -283,4 +327,5 @@ struct MessageBubble: View {
             }
         }
     }
+}
 }
