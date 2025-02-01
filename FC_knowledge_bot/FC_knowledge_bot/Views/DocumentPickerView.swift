@@ -42,6 +42,7 @@ struct ManualTextListItemView: View {
             Text(metadata.title)
                 .lineLimit(1)
             Text(content.prefix(50))
+                .lineLimit(1)
                 .font(.caption)
                 .foregroundColor(.gray)
             Text(metadata.lastModifiedAt, style: .date)
