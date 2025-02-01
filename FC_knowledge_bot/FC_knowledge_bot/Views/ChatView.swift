@@ -27,7 +27,7 @@ struct ChatView: View {
                             .foregroundColor(.white)
                     }
                     Spacer()
-                    Text("ChatGPT 4o")
+                    Text("Knowledge Agent")
                         .foregroundColor(.white)
                         .font(.headline)
                     Spacer()
@@ -54,29 +54,16 @@ struct ChatView: View {
                         VStack(spacing: 12) {
                             Button(action: {}) {
                                 HStack {
-                                    Text("Create an image")
+                                    Text("Ask me a question")
                                         .foregroundColor(.primary)
-                                    Text("for my presentation")
-                                        .foregroundColor(.gray)
+                                    
                                     Spacer()
                                 }
                                 .padding()
                                 .background(Color(.systemGray6))
                                 .cornerRadius(12)
                             }
-                            
-                            Button(action: {}) {
-                                HStack {
-                                    Text("Help me understand")
-                                        .foregroundColor(.primary)
-                                    Text("a technical document")
-                                        .foregroundColor(.gray)
-                                    Spacer()
-                                }
-                                .padding()
-                                .background(Color(.systemGray6))
-                                .cornerRadius(12)
-                            }
+                           
                         }
                         .padding(.horizontal)
                         .padding(.bottom, 80)
@@ -91,10 +78,6 @@ struct ChatView: View {
                     HStack(spacing: 12) {
                         Button(action: {}) {
                             Image(systemName: "plus")
-                                .foregroundColor(.primary)
-                        }
-                        Button(action: {}) {
-                            Image(systemName: "globe")
                                 .foregroundColor(.primary)
                         }
                         TextField("Message", text: $messageText)
@@ -211,9 +194,10 @@ struct ChatView: View {
                 print("\n[OpenAI Messages]\n\(messages)")
                 
                 let requestBody: [String: Any] = [
-                    "model": "gpt-3.5-turbo",
+                    "model": "gpt-4",
                     "messages": messages + [["role": "user", "content": contextMessage]],
-                    "temperature": 0.7
+                    "temperature": 0.7,
+                    "max_tokens": 2000
                 ]
                 
                 request.httpBody = try? JSONSerialization.data(withJSONObject: requestBody)
