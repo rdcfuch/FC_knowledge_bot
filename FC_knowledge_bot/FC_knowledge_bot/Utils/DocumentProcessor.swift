@@ -35,7 +35,7 @@ class DocumentProcessor {
         return try String(contentsOf: fileURL, encoding: .utf8)
     }
     
-    private func splitIntoChunks(_ text: String) -> [String] {
+    internal func splitIntoChunks(_ text: String) -> [String] {
         var chunks: [String] = []
         let words = text.split(separator: " ")
         var currentChunk: [String] = []

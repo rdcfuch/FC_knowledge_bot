@@ -15,6 +15,8 @@ struct ManualInputView: View {
     @State private var title = ""
     @State private var content = ""
     @State private var hasChanges = false
+    @State private var isProcessing = false
+    @State private var errorMessage: String? = nil
     
     var editingText: ManualText?
     
@@ -42,12 +44,29 @@ struct ManualInputView: View {
                         updateHasChanges()
                     }
             }
+            
+            if isProcessing {
+                Section {
+                    HStack {
+                        Spacer()
+                        ProgressView("Processing text...")
+                        Spacer()
+                    }
+                }
+            }
+            
+            if let error = errorMessage {
+                Section {
+                    Text(error)
+                        .foregroundColor(.red)
+                }
+            }
         }
         .navigationTitle(editingText == nil ? "New Text" : "Edit Text")
         .navigationBarItems(
             leading: Button("Cancel") { dismiss() },
             trailing: Button("Save") { saveText() }
-                .disabled(!hasChanges || (title.isEmpty && content.isEmpty))
+                .disabled(!hasChanges || (title.isEmpty && content.isEmpty) || isProcessing)
         )
     }
     
@@ -60,6 +79,9 @@ struct ManualInputView: View {
     }
     
     private func saveText() {
+        isProcessing = true
+        errorMessage = nil
+        
         if let existingText = editingText {
             // Update existing text
             existingText.title = title
@@ -77,19 +99,56 @@ struct ManualInputView: View {
         Task {
             do {
                 let processor = DocumentProcessor(apiKey: UserDefaults.standard.string(forKey: "openai_api_key") ?? "")
-                let embedding = try await processor.getEmbedding(for: content)
                 
-                // Create and save document chunk directly using SwiftData
-                let chunk = DocumentChunk(content: content)
-                chunk.embedding = embedding
-                modelContext.insert(chunk)
+                // Split content into chunks and generate embeddings
+                let chunks = processor.splitIntoChunks(content)
+                print("\n[Vector DB Update] Splitting content into \(chunks.count) chunks")
+                
+                for (index, chunk) in chunks.enumerated() {
+                    print("\n[Vector DB Update] Processing chunk #\(index + 1)")
+                    print("Content: \(chunk)")
+                    
+                    let embedding = try await processor.getEmbedding(for: chunk)
+                    print("Generated embedding with size: \(embedding.count)")
+                    
+                    // Create and save document chunk directly using SwiftData
+                    let documentChunk = DocumentChunk(content: chunk)
+                    documentChunk.embedding = embedding
+                    modelContext.insert(documentChunk)
+                    print("Saved chunk to vector database")
+                }
+                
                 try? modelContext.save()
+                print("\n[Vector DB Update] All chunks processed and saved")
+                
+                // List all contents in vector database
+                let descriptor = FetchDescriptor<DocumentChunk>()
+                if let chunks = try? modelContext.fetch(descriptor) {
+                    print("\n[Vector DB Contents]")
+                    print("Total chunks in database: \(chunks.count)")
+                    
+                    for (index, chunk) in chunks.enumerated() {
+                        print("\nChunk #\(index + 1)")
+                        print("Content: \(chunk.content)")
+                        if let embedding = chunk.embedding {
+                            print("Embedding size: \(embedding.count)")
+                        } else {
+                            print("No embedding found")
+                        }
+                    }
+                }
+                
+                await MainActor.run {
+                    isProcessing = false
+                    dismiss()
+                }
             } catch {
-                print("Error updating vector database: \(error)")
+                await MainActor.run {
+                    isProcessing = false
+                    errorMessage = "Error updating vector database: \(error.localizedDescription)"
+                }
             }
         }
-        
-        dismiss()
     }
 }
 

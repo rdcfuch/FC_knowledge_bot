@@ -126,39 +126,57 @@ struct SettingsView: View {
         Task {
             do {
                 // Get all documents from the database
-                let schema = Schema([Document.self, DocumentChunk.self])
+                let schema = Schema([Document.self, DocumentChunk.self, ManualText.self])
                 let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
                 let container = try ModelContainer(for: schema, configurations: [modelConfiguration])
                 let context = ModelContext(container)
                 
-                // Fetch all documents
-                let descriptor = FetchDescriptor<Document>()
-                let documents = try context.fetch(descriptor)
-                
-                // Delete all chunks
+                // Delete only the chunks (vector database contents)
                 let chunkDescriptor = FetchDescriptor<DocumentChunk>()
                 let chunks = try context.fetch(chunkDescriptor)
                 chunks.forEach { context.delete($0) }
+                
+                // Process documents
+                let documentDescriptor = FetchDescriptor<Document>()
+                let documents = try context.fetch(documentDescriptor)
+                
+                // Process manual texts
+                let manualTextDescriptor = FetchDescriptor<ManualText>()
+                let manualTexts = try context.fetch(manualTextDescriptor)
+                
+                let processor = DocumentProcessor(apiKey: apiKey)
                 
                 // Process each document
                 for document in documents {
                     // Check if the file exists
                     let fileManager = FileManager.default
                     if !fileManager.fileExists(atPath: document.localPath) {
-                        // If file doesn't exist, delete the document from database
-                        context.delete(document)
-                        continue
+                        continue // Skip if file doesn't exist, but don't delete the document
                     }
                     
+                    // Reset document's processing state
                     document.chunks = []
                     document.isProcessed = false
                     
-                    let processor = DocumentProcessor(apiKey: apiKey)
+                    // Process the document
                     try await processor.processDocument(document)
                     document.isProcessed = true
                 }
                 
-                // Save context to persist document deletions
+                // Process each manual text
+                for text in manualTexts {
+                    // Split content into chunks and generate embeddings
+                    let chunks = processor.splitIntoChunks(text.content)
+                    
+                    for chunk in chunks {
+                        let embedding = try await processor.getEmbedding(for: chunk)
+                        let documentChunk = DocumentChunk(content: chunk)
+                        documentChunk.embedding = embedding
+                        context.insert(documentChunk)
+                    }
+                }
+                
+                // Save context to persist changes
                 try context.save()
                 
                 await MainActor.run {

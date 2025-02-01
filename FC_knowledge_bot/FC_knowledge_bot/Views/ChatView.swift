@@ -191,11 +191,18 @@ struct ChatView: View {
                     "content": $0.content
                 ] } ?? []
                 
-                print("\n[OpenAI Messages]\n\(messages)")
+                // Create a mutable copy and add context message
+                var finalMessages = messages
+                finalMessages.append(["role": "system", "content": contextMessage])
+                
+                print("\n[OpenAI Messages]")
+                print("Chat History: \(messages)")
+                print("Context Message: \(contextMessage)")
+                print("Final Messages: \(finalMessages)")
                 
                 let requestBody: [String: Any] = [
                     "model": "gpt-4",
-                    "messages": messages + [["role": "user", "content": contextMessage]],
+                    "messages": finalMessages,
                     "temperature": 0.7,
                     "max_tokens": 2000
                 ]
