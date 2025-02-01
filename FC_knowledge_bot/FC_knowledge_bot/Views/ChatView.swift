@@ -76,7 +76,7 @@ struct ChatView: View {
                 VStack(spacing: 0) {
                     Divider()
                     HStack(spacing: 12) {
-                        Button(action: {}) {
+                        Button(action: { showDocumentPicker.toggle() }) {
                             Image(systemName: "plus")
                                 .foregroundColor(.primary)
                         }

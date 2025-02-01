@@ -14,7 +14,7 @@ struct DocumentPickerView: View {
             List {
                 Section(header: Text("Manual Input")) {
                     Button(action: { showManualInput.toggle() }) {
-                        Label("Add Text", systemImage: "square.and.pencil")
+                        Label("Add Knowledge", systemImage: "square.and.pencil")
                     }
                 }
                 
@@ -36,8 +36,16 @@ struct DocumentPickerView: View {
                     .onDelete(perform: deleteManualTexts)
                 }
             }
-            .navigationTitle("Add Knowledge")
-            .navigationBarItems(trailing: Button("Done") { dismiss() })
+            .navigationTitle("Knowledge Management")
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text("Knowledge Management")
+                        .font(.headline)
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") { dismiss() }
+                }
+            }
             .sheet(isPresented: $showManualInput) {
                 NavigationView {
                     ManualInputView()

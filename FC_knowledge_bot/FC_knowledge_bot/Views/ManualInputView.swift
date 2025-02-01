@@ -129,6 +129,7 @@ struct ManualInputView: View {
                     
                     for (index, chunk) in chunks.enumerated() {
                         print("\nChunk #\(index + 1)")
+                        print("ID: \(chunk.id)")
                         print("Content: \(chunk.content)")
                         if let embedding = chunk.embedding {
                             print("Embedding size: \(embedding.count)")
