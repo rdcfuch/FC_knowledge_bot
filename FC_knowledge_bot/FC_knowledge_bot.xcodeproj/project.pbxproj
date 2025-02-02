@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		5B4B3FDF2D4ECBD2002D2E10 /* Media.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 5B4B3FDE2D4ECBD2002D2E10 /* Media.xcassets */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		5B4B3F962D4D949D002D2E10 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -27,6 +31,7 @@
 		5B4B3F812D4D949A002D2E10 /* FC_knowledge_bot.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FC_knowledge_bot.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		5B4B3F952D4D949D002D2E10 /* FC_knowledge_botTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FC_knowledge_botTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		5B4B3F9F2D4D949D002D2E10 /* FC_knowledge_botUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FC_knowledge_botUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		5B4B3FDE2D4ECBD2002D2E10 /* Media.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Media.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -88,6 +93,7 @@
 		5B4B3F782D4D949A002D2E10 = {
 			isa = PBXGroup;
 			children = (
+				5B4B3FDE2D4ECBD2002D2E10 /* Media.xcassets */,
 				5B4B3F832D4D949A002D2E10 /* FC_knowledge_bot */,
 				5B4B3F982D4D949D002D2E10 /* FC_knowledge_botTests */,
 				5B4B3FA22D4D949D002D2E10 /* FC_knowledge_botUITests */,
@@ -225,6 +231,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				5B4B3FDF2D4ECBD2002D2E10 /* Media.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

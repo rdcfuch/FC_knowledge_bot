@@ -9,14 +9,28 @@ import SwiftUI
 import SwiftData
 
 struct ChatView: View {
-    @Environment(\.modelContext) private var modelContext
+    @Environment(\.modelContext) private var modelContext: ModelContext
     @Query private var chats: [Chat]
     @State private var messageText = ""
     @State private var selectedChat: Chat?
     @State private var showSettings = false
     @State private var showDocumentPicker = false
     @AppStorage("openai_api_key") private var apiKey = ""
+    @AppStorage("deepseek_api_key") private var deepseekApiKey = ""
+    @AppStorage("selected_model") private var selectedModel = "deepseek-chat"
     private let vectorStore = VectorStore()
+    
+    private var isUsingDeepseek: Bool {
+        selectedModel.hasPrefix("deepseek")
+    }
+    
+    private var currentApiKey: String {
+        isUsingDeepseek ? deepseekApiKey : apiKey
+    }
+    
+    private var apiEndpoint: String {
+        isUsingDeepseek ? "https://api.deepseek.com/v1/chat/completions" : "https://api.openai.com/v1/chat/completions"
+    }
     
     var body: some View {
         NavigationStack {
@@ -26,8 +40,16 @@ struct ChatView: View {
                     Button(action: { showSettings.toggle() }) {
                         Image(systemName: "gearshape")
                             .foregroundColor(.white)
-                }
+                    }
                     Spacer()
+                    Button(action: {
+                        selectedModel = isUsingDeepseek ? "gpt-4o-mini" : "deepseek-chat"
+                        UserDefaults.standard.set(selectedModel, forKey: "selected_model")
+                    }) {
+                        Image(systemName: isUsingDeepseek ? "d.circle.fill" : "g.circle.fill")
+                            .foregroundColor(.white)
+                            .font(.system(size: 20))
+                    }
                     Text("Knowledge Agent")
                         .foregroundColor(.white)
                         .font(.headline)
@@ -35,7 +57,7 @@ struct ChatView: View {
                     Button(action: { showDocumentPicker.toggle() }) {
                         Image(systemName: "doc.badge.plus")
                             .foregroundColor(.white)
-                }
+                    }
                 }
                 .padding()
                 .background(Color.black)
@@ -92,6 +114,13 @@ struct ChatView: View {
                 }
                     .padding()
                     .background(Color(.systemBackground))
+                    .sheet(isPresented: $showSettings) {
+                        SettingsView(apiKey: $apiKey)
+                    }
+                    .sheet(isPresented: $showDocumentPicker) {
+                        DocumentPickerView()
+                            .modelContainer(modelContext.container)
+                    }
                 }
             }
             .background(Color(.systemBackground))
@@ -134,13 +163,13 @@ struct ChatView: View {
     
     private func sendMessage() {
         guard !messageText.isEmpty else { return }
-        guard !apiKey.isEmpty else {
+        guard !currentApiKey.isEmpty else {
             let errorChat = selectedChat ?? Chat(title: "Error")
             if selectedChat == nil {
                 modelContext.insert(errorChat)
                 selectedChat = errorChat
             }
-            let errorMessage = ChatMessage(content: "Error: OpenAI API key is not set. Please set it in Settings.", isUserMessage: false)
+            let errorMessage = ChatMessage(content: "Error: API key is not set for \(isUsingDeepseek ? "DeepSeek" : "OpenAI"). Please set it in Settings.", isUserMessage: false)
             errorChat.messages?.append(errorMessage)
             return
         }
@@ -153,67 +182,32 @@ struct ChatView: View {
         let newMessage = ChatMessage(content: messageText, isUserMessage: true)
         newChat.messages?.append(newMessage)
         
-        // Store the message text and clear the input
         let userMessage = messageText
         messageText = ""
         
         print("\n[User Message] \(userMessage)")
         
-        // Search for relevant document chunks
         let processor = DocumentProcessor(apiKey: apiKey)
         Task {
             do {
-                // Get embeddings for the user message
                 let embedding = try await processor.getEmbedding(for: userMessage)
                 print("\n[Vector Search Debug] User message: \(userMessage)")
                 print("[Vector Search Debug] Query embedding size: \(embedding.count)")
                 
-                // Debug: List all contents in vector DB before search
-                print("\n[VectorDB Contents Before Search]")
                 let descriptor = FetchDescriptor<DocumentChunk>()
                 let chunks = try modelContext.fetch(descriptor)
                 print("Total chunks in database: \(chunks.count)")
                 
-                for (index, chunk) in chunks.enumerated() {
-                    print("\nChunk #\(index + 1)")
-                    print("ID: \(chunk.id)")
-                    print("Content: \(chunk.content)")
-                    if let embedding = chunk.embedding {
-                        print("Embedding size: \(embedding.count)")
-                    } else {
-                        print("No embedding found")
-                    }
-                }
-                
-                // Search for similar chunks using VectorStore
-                print("\n[Vector Search Debug] Starting similarity search...")
                 let similarChunks = try vectorStore.searchSimilar(queryEmbedding: embedding, maxResults: 5)
                 print("\n[Vector Search Results] Found \(similarChunks.count) similar chunks")
                 
-                for (index, chunk) in similarChunks.enumerated() {
-                    print("\nChunk #\(index + 1)")
-                    print("Content: \(chunk.content)")
-                    if let similarity = chunk.similarity {
-                        print("Similarity score: \(similarity)")
-                    }
-                    if let embedding = chunk.embedding {
-                        print("Embedding size: \(embedding.count)")
-                    }
-                }
-                
-                // Construct context message from similar chunks
                 let contextMessage = "Context from relevant documents:\n" + (similarChunks.map { "\n" + $0.content }.joined())
-                
-                // // List all contents in vector DB
-                // listVectorDBContents()
-                
                 print("\n[Context Message]\n\(contextMessage)")
                 
-                // Send message to OpenAI API
-                let url = URL(string: "https://api.openai.com/v1/chat/completions")!
+                let url = URL(string: apiEndpoint)!
                 var request = URLRequest(url: url)
                 request.httpMethod = "POST"
-                request.setValue("Bearer " + apiKey, forHTTPHeaderField: "Authorization")
+                request.setValue("Bearer " + currentApiKey, forHTTPHeaderField: "Authorization")
                 request.setValue("application/json", forHTTPHeaderField: "Content-Type")
                 request.timeoutInterval = 30
                 request.networkServiceType = .responsiveData
@@ -223,20 +217,15 @@ struct ChatView: View {
                     "content": $0.content
                 ] } ?? []
                 
-                // Create a mutable copy and add context message
                 var finalMessages = messages
                 finalMessages.append(["role": "system", "content": contextMessage])
                 
-                print("\n[OpenAI Messages]")
-                print("Chat History: \(messages)")
-                print("Context Message: \(contextMessage)")
-                print("Final Messages: \(finalMessages)")
-                
                 let requestBody: [String: Any] = [
-                    "model": "gpt-4o-mini",
+                    "model": selectedModel,
                     "messages": finalMessages,
                     "temperature": 0.7,
-                    "max_tokens": 2000
+                    "max_tokens": isUsingDeepseek ? 4096 : 2000,
+                    "stream": false
                 ]
                 
                 request.httpBody = try? JSONSerialization.data(withJSONObject: requestBody)
@@ -250,12 +239,17 @@ struct ChatView: View {
                 guard httpResponse.statusCode == 200 else {
                     let errorJson = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
                     let errorMessage = (errorJson?["error"] as? [String: Any])?["message"] as? String ?? "Unknown error"
-                    throw NSError(domain: "ChatView", code: httpResponse.statusCode, 
-                                 userInfo: [NSLocalizedDescriptionKey: "OpenAI API Error: \(errorMessage)"])
+                    if httpResponse.statusCode == 401 {
+                        throw NSError(domain: "ChatView", code: httpResponse.statusCode, 
+                                     userInfo: [NSLocalizedDescriptionKey: "Invalid API key for \(isUsingDeepseek ? "DeepSeek" : "OpenAI"). Please check your settings."])
+                    } else {
+                        throw NSError(domain: "ChatView", code: httpResponse.statusCode, 
+                                     userInfo: [NSLocalizedDescriptionKey: "API Error: \(errorMessage)"])
+                    }
                 }
                 
                 let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-                print("\n[OpenAI Response]\n\(String(describing: json))")
+                print("\n[API Response]\n\(String(describing: json))")
                 
                 guard let choices = json?["choices"] as? [[String: Any]],
                       let firstChoice = choices.first,
@@ -268,19 +262,6 @@ struct ChatView: View {
                 await MainActor.run {
                     let botMessage = ChatMessage(content: content, isUserMessage: false)
                     newChat.messages?.append(botMessage)
-                    
-                    // Print manual texts information after chat completion
-                    print("\n[Manual Texts List after Chat]")
-                    let fileManager = ManualTextFileManager.shared
-                    let manualTexts = fileManager.getAllTexts()
-                    print("Total manual texts: \(manualTexts.count)")
-                    
-                    for (index, (metadata, content)) in manualTexts.enumerated() {
-                        print("\nText #\(index + 1)")
-                        print("Title: \(metadata.title)")
-                        print("Content: \(content.prefix(100))...")
-                        print("Last modified: \(metadata.lastModifiedAt)")
-                    }
                 }
             } catch {
                 await MainActor.run {
