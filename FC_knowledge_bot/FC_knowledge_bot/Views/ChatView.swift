@@ -43,12 +43,14 @@ struct ChatView: View {
                     }
                     Spacer()
                     Button(action: {
-                        selectedModel = isUsingDeepseek ? "gpt-4o-mini" : "deepseek-chat"
+                        selectedModel = isUsingDeepseek ? "gpt-4-mini" : "deepseek-chat"
                         UserDefaults.standard.set(selectedModel, forKey: "selected_model")
                     }) {
-                        Image(systemName: isUsingDeepseek ? "d.circle.fill" : "g.circle.fill")
-                            .foregroundColor(.white)
-                            .font(.system(size: 20))
+                        Image(isUsingDeepseek ? "ds" : "openai")
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 24, height: 24)
+                            .scaledToFit()
                     }
                     Text("Knowledge Agent")
                         .foregroundColor(.white)
